@@ -193,3 +193,65 @@ module Day5 = struct
 
 end
 
+module Day6 = struct
+
+  let grid1 = Array.make_matrix 1000 1000 false
+
+  let grid2 = Array.make_matrix 1000 1000 0
+
+  type instruction = TurnOn | TurnOff | Toggle
+
+  let parse str =
+    let r_cord = Re2.of_string "(\\d{1,3}),(\\d{1,3})" in
+    let r_on = Re2.of_string "^turn on" in
+    let r_off = Re2.of_string "^turn off" in
+    let i =
+      if Re2.matches r_on str then
+        TurnOn
+      else if Re2.matches r_off str then
+        TurnOff
+      else
+        Toggle
+    in
+    let (p1,p2) =
+      let l =
+        Re2.find_all r_cord str
+        |> (fun x -> match x with Core_kernel__.Result.Ok x -> x | _ -> assert false)
+        |> List.map (fun x -> String.split_on_char ',' x)
+      in
+      match l with [p1;p2] -> (match p1,p2 with (x1::y1::[],x2::y2::[]) -> ((x1,y1),(x2,y2)) | _ -> assert false) | _ -> assert false
+    in
+    i,p1,p2
+
+  let update1 inst count x y = match inst with
+    | TurnOn ->  count := !count+1-Bool.to_int (grid1.(x).(y)); grid1.(x).(y) <- true
+    | TurnOff -> count := !count-Bool.to_int (grid1.(x).(y)); grid1.(x).(y) <- false
+    | Toggle -> count := !count+1-2*Bool.to_int (grid1.(x).(y)); grid1.(x).(y) <- not (grid1.(x).(y))
+
+  let update2 inst count x y = match inst with
+    | TurnOn ->  count := !count+1; grid2.(x).(y) <- 1+grid2.(x).(y)
+    | TurnOff ->  count := !count + (max (-1) (-1*grid2.(x).(y))); grid2.(x).(y) <- (max 0 (-1+grid2.(x).(y)))
+    | Toggle ->  count := !count+2; grid2.(x).(y) <- 2+grid2.(x).(y)
+
+  let perform update acc (inst,(x1,y1),(x2,y2)) =
+    let count = ref acc in
+    let x1 = int_of_string x1 in
+    let y1 = int_of_string y1 in
+    let x2 = int_of_string x2 in
+    let y2 = int_of_string y2 in
+    for x = x1 to x2 do
+      for y = y1 to y2 do
+        update inst count x y
+      done
+    done ;!count
+
+  let perform_all update =
+    let file = Core.In_channel.create "day6-input.txt" in
+    Core.In_channel.fold_lines
+      file
+      ~init:0
+      ~f:(fun acc line -> parse line |> perform update acc)
+
+  let main () = (perform_all update1,perform_all update2)
+
+end
