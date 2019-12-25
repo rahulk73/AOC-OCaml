@@ -1,5 +1,7 @@
+(*Module dependencies : Core, Re2*)
+
 module Day1 = struct
-  let file = "day1-input.txt"
+  let file = "input/day1-input.txt"
 
   let file_to_num file =
     let ic = open_in file in
@@ -49,7 +51,7 @@ module Day2 = struct
     m+(l*b*h)
 
   let calc_total calc =
-    let file = In_channel.create "day2-input.txt" in
+    let file = In_channel.create "input/day2-input.txt" in
     In_channel.fold_lines
       file
       ~init:0
@@ -69,7 +71,7 @@ module Day3 = struct
   let grid2 = Hashtbl.create 64
 
   let get_char_list () =
-    let file = Core.In_channel.create "day3-input.txt" in
+    let file = Core.In_channel.create "input/day3-input.txt" in
     let rec aux acc = match (Core.In_channel.input_char file) with
       | Some c -> aux (c::acc)
       | _ -> List.rev acc
@@ -178,7 +180,7 @@ module Day5 = struct
 
 
   let check_file valid =
-    let file = Core.In_channel.create "day5-input.txt" in
+    let file = Core.In_channel.create "input/day5-input.txt" in
     Core.In_channel.fold_lines
       file
       ~init:0
@@ -246,12 +248,112 @@ module Day6 = struct
     done ;!count
 
   let perform_all update =
-    let file = Core.In_channel.create "day6-input.txt" in
+    let file = Core.In_channel.create "input/day6-input.txt" in
     Core.In_channel.fold_lines
       file
       ~init:0
       ~f:(fun acc line -> parse line |> perform update acc)
 
   let main () = (perform_all update1,perform_all update2)
+
+end
+
+module Day7 = struct
+
+  open Int
+
+  module Signals = Map.Make(String)
+
+  type primop = And | Or | Not | Lshift | Rshift
+
+  type exp = Val of int | Wire of string | Primop of primop * exp list
+
+  exception BadArgs
+
+  let parse acc line=
+    let exp_list = String.split_on_char ' ' line in
+    let op =
+      if Re2.matches (Re2.of_string "AND") line then
+        Some And
+      else if Re2.matches (Re2.of_string "OR") line then
+        Some Or
+      else if Re2.matches (Re2.of_string "NOT") line then
+        Some Not
+      else if Re2.matches (Re2.of_string "LSHIFT") line then
+        Some Lshift
+      else if Re2.matches (Re2.of_string "RSHIFT") line then
+        Some Rshift
+      else
+        None
+    in
+    let parse_exp exp =
+      if Re2.matches (Re2.of_string "\\d+") exp then
+        Val (int_of_string exp)
+      else
+        Wire exp
+    in
+
+    let e1,e2,id = match op with
+      | Some And | Some Or ->
+        let e1',e2',id = (List.nth exp_list 0),(List.nth exp_list 2),(List.nth exp_list 4) in
+        let e1 = parse_exp e1' in
+        let e2 = parse_exp e2' in
+        Some e1,Some e2,id
+
+      | Some Lshift | Some Rshift ->
+        let e1',e2,id = (List.nth exp_list 0),Val (int_of_string (List.nth exp_list 2)),(List.nth exp_list 4) in
+        let e1 = parse_exp e1' in
+        Some e1,Some e2,id
+
+      | Some Not ->
+        let e1',id = (List.nth exp_list 1),(List.nth exp_list 3) in
+        let e1 = parse_exp e1' in
+        Some e1,None,id
+
+      | None ->
+        let e1',id = (List.nth exp_list 0),(List.nth exp_list 2)in
+        let e1 = parse_exp e1' in
+        Some e1,None,id
+    in
+
+    match op,e1,e2 with
+    | Some And, Some e1, Some e2 -> Signals.add id (Primop (And,[e1;e2])) acc
+    | Some Or, Some e1, Some e2 -> Signals.add id (Primop (Or,[e1;e2])) acc
+    | Some Lshift, Some e1, Some e2 -> Signals.add id (Primop (Lshift,[e1;e2])) acc
+    | Some Rshift, Some e1, Some e2 -> Signals.add id (Primop (Rshift,[e1;e2])) acc
+    | Some Not, Some e1, None -> Signals.add id (Primop (Not,[e1])) acc
+    | None, Some e1, None -> Signals.add id e1 acc
+    | _ -> assert false
+
+  let build_env () =
+    let file = Core.In_channel.create "input/day7-input.txt" in
+    Core.In_channel.fold_lines
+      file
+      ~init:Signals.empty
+      ~f:parse
+
+  let eval_primop op arg_l = match op,arg_l with
+    | And,[a1;a2] -> logand (logand a1 a2) 0xFFFF
+    | Or, [a1;a2] -> logand (logor a1 a2) 0xFFFF
+    | Not, [a1] -> logand (lognot a1) 0xFFFF
+    | Lshift, [a1;a2] -> logand (shift_left a1 a2) 0xFFFF
+    | Rshift, [a1;a2] -> logand (shift_right a1 a2) 0xFFFF
+    | _ -> raise BadArgs
+
+  let memo = Core.String.Table.create()
+
+  let rec eval env exp = match exp with
+    | Val i -> i
+    | Wire id -> Core.String.Table.find_or_add memo id ~default:(fun () -> eval env (Signals.find id env))
+    | Primop (op,exp_l) -> let arg_l = List.map (eval env) exp_l in eval_primop op arg_l
+
+  let mapping = build_env ()
+
+  let main () =
+    let p1 = eval mapping (Wire "a") in
+    let _ = Core.String.Table.clear memo in
+    let mapping = Signals.add "b" (Val p1) mapping in
+    let p2 = eval mapping (Wire "a") in
+    p1,p2
 
 end
