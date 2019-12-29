@@ -40,6 +40,7 @@ module Day2 = struct
     let x = l*b in
     let y = b*h in
     let z = l*h in
+
     let m = min (min x y) z in
     2*(x+y+z)+m
 
@@ -357,3 +358,100 @@ module Day7 = struct
     p1,p2
 
 end
+
+module Day8 = struct
+
+  open Core
+
+  let decode l =
+    let rec aux l acc = match l with
+      | '\\'::'x'::_::_ :: ls-> aux ls (acc+1)
+      | '\\'::_::ls -> aux ls (acc+1)
+      | _::ls -> aux ls (acc+1)
+      | [] -> (acc-2)
+    in
+    aux l 0
+
+  let encode l =
+    let rec aux l acc = match l with
+      | '\"'::ls -> aux ls (acc+2)
+      | '\\'::ls -> aux ls (acc+2)
+      | _::ls -> aux ls (acc+1)
+      | [] -> (acc+2)
+    in
+    aux l 0
+
+  let parse f =
+    let file = In_channel.create "input/day8-input.txt" in
+    In_channel.fold_lines
+      file
+      ~init:0
+      ~f:(fun acc line ->
+          let num_code = (String.length line) in
+          num_code - f (String.to_list line)+acc
+        )
+
+  let main () = (parse decode,- parse encode)
+
+end
+
+module Day9 = struct
+
+  module CM = Map.Make(String)
+
+  let parse () =
+    let update_aux city distance x = match x with
+      | Some v -> Some ((city,distance)::v)
+      | None -> Some ((city,distance)::[])
+    in
+    let file = Core.In_channel.create "input/day9-input.txt" in
+    Core.In_channel.fold_lines
+      file
+      ~init:CM.empty
+      ~f:(fun acc line ->
+          let sl = String.split_on_char ' ' line in
+          let city1,city2,distance = (List.nth sl 0),(List.nth sl 2),int_of_string(List.nth sl 4) in
+          let acc = CM.update city1 (update_aux city2 distance) acc in
+          CM.update city2 (update_aux city1 distance) acc
+        )
+
+  let graph = parse ()
+
+  let cities =
+    let rec aux l = match l with
+      | (k,v)::ls -> k :: (aux ls)
+      | [] -> []
+    in
+    aux (CM.bindings graph)
+
+  let dist path =
+    let dist2 x y =
+      List.assoc y (CM.find x graph)
+    in
+    let rec aux path acc = match path with
+      | x :: y :: xs -> aux (y::xs) ((dist2 x y)+acc)
+      |( _ :: []) | [] -> acc
+    in
+    aux path 0
+
+  let rec permutations = function
+    | [] -> []
+    | x::[] -> [[x]]
+    | l ->
+      List.fold_left
+        (fun acc x -> acc @ List.map (fun p -> x::p) (permutations (List.filter ((<>) x) l)))
+        []
+        l
+
+  let find fpick acc=
+    List.fold_left
+      (fun acc x -> fpick acc (dist x))
+      acc
+      (permutations cities)
+
+  let main () = (find min Int.max_int, find max Int.min_int)
+
+
+
+end
+
