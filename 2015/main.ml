@@ -451,7 +451,144 @@ module Day9 = struct
 
   let main () = (find min Int.max_int, find max Int.min_int)
 
+end
 
+module Day10 = struct
+
+  let input = [1;1;1;3;1;2;2;1;1;3]
+
+  type group =
+    {
+      rep : int;
+      count : int ref
+    }
+
+  let fresh n = {rep = n; count = ref 1}
+
+  let parse seq =
+    let rec aux seq cur acc = match seq with
+      | x :: xs when x = cur -> incr (List.hd acc).count; aux xs cur acc
+      | x :: xs -> aux xs x ((fresh x)::acc)
+      | [] -> List.rev acc
+    in
+    aux seq (-1) []
+
+  let gen gl =
+    let rec aux gl acc = match gl with
+      | x :: xs -> aux xs ((x.rep)::!(x.count)::acc)
+      | [] -> List.rev acc
+    in
+    aux gl []
+
+  let compute n initial =
+    let cur = ref initial in
+    for i = 0 to (n-1) do
+      cur := (!cur) |> parse |> gen;
+    done;
+    !cur
+
+  let main () =
+    let a1 = (input |> compute 40) in
+    let a2 = (a1 |> compute 10) in
+    (a1 |> List.length),(a2 |> List.length)
+
+end
+
+module Day11 = struct
+
+  let input = "cqjxjnds"
+
+  exception OutOfBounds
+
+  let increment cl =
+    let rec aux cl acc = match cl with
+      | x :: xs when (Char.code x < 122) -> List.rev xs @ [Char.chr (1+Char.code x)] @ acc
+      | x :: xs when (Char.code x = 122)-> aux xs (acc@['a'])
+      | [] -> raise (OutOfBounds)
+      | _ -> assert false
+    in
+    aux (List.rev cl) []
+
+  let satisfy cl =
+    let rec check1 cl = match cl with
+      | x :: y :: z :: tl -> ((1+Char.code x = Char.code y ) && (1+Char.code y = Char.code z)) || check1 (y::z::tl)
+      | _ -> false
+    in
+    let rec check2 cl = match cl with
+      | hd :: tl when (hd = 'i' || hd = 'o' || hd = 'l') -> false
+      | hd :: tl -> true && check2 tl
+      | [] -> true
+    in
+    let check3 cl =
+      let rec aux cl acc = match cl with
+        | x :: y :: tl when (x = y && not(List.mem x acc)) -> aux tl (x::acc)
+        | x :: y :: tl -> aux (y::tl) acc
+        | _::[] | [] -> (List.length acc) >= 2
+      in
+      aux cl []
+    in
+    (check1 cl) && (check2 cl) && (check3 cl)
+
+  let next_pswd pswd =
+    let pswd = increment (Core.String.to_list pswd) in
+    let rec aux cur = match (satisfy cur) with
+      | true -> cur
+      | false -> aux (increment cur)
+    in
+    aux pswd
+
+  let main () =
+    let first = input |> next_pswd |> Core.String.of_char_list in
+    (first, first |> next_pswd |> Core.String.of_char_list)
+
+end
+
+module Day12 = struct
+
+  let file = "input/day12-input.json"
+
+  let count_all () =
+    let r = Re2.create_exn "-?\\d{1,}" in
+    Core.In_channel.read_all file
+    |> Re2.find_all_exn r
+    |> List.fold_left (fun acc x ->acc+int_of_string x ) 0
+
+  let count_all_alt () =
+    let json = Core.In_channel.read_all file |> Yojson.Basic.from_string in
+    let rec aux acc jtree = match jtree with
+      | `Int i -> acc+i
+      | `List l -> List.fold_left aux acc l
+      | `Assoc l -> List.fold_left aux acc (snd (List.split l))
+      | _ -> acc
+    in
+    aux 0 json
+
+  exception Red
+
+  let count_not_red () =
+    let json = Core.In_channel.read_all file |> Yojson.Basic.from_string in
+    let rec aux acc jtree = match jtree with
+      | `Int i -> acc+i
+      | `List l -> List.fold_left aux acc l
+      | `Assoc l ->
+        let cur_acc = acc in
+        begin
+          try
+            List.fold_left
+              (fun acc x ->
+                 match x with
+                 | `String s when s = "red" -> raise Red
+                 | _ -> aux acc x
+              )
+              acc
+              (snd (List.split l))
+          with Red -> cur_acc
+        end
+      | _ -> acc
+    in
+    aux 0 json
+
+  let main () = (count_all (), count_not_red ())
 
 end
 
